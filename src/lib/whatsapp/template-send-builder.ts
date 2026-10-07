@@ -36,6 +36,9 @@ import {
   extractVariableNames,
   isNamedVariable,
 } from './template-validators';
+import { getT } from '@/lib/i18n/translate';
+
+const t = getT('Validation.templates');
 
 export interface SendTimeParams {
   /** Values for body variables (positional {{1}} array or named variable map). */
@@ -88,8 +91,9 @@ function buildHeaderComponent(
     if (varNames.length === 0) return null;
     const value = params.headerText;
     if (!value || !value.trim()) {
+      const isNamed = varNames.some(isNamedVariable);
       throw new Error(
-        'Header text variable requires a value — pass headerText.',
+        t('headerTextValueRequired', { var: isNamed ? `{{${varNames[0]}}}` : '{{1}}' }),
       );
     }
     const isNamed = varNames.some(isNamedVariable);
@@ -116,7 +120,7 @@ function buildHeaderComponent(
   const id = params.headerMediaId;
   if (!link && !id) {
     throw new Error(
-      `${headerType} header requires a media link or id at send time — set header_media_url on the template or pass headerMediaUrl/headerMediaId.`,
+      t('mediaHeaderSendSource', { type: headerType }),
     );
   }
   const mediaPayload: { link?: string; id?: string } = id ? { id } : { link };
@@ -162,7 +166,7 @@ function buildBodyComponent(
   } else {
     if (varNames.length === 0) return null;
     throw new Error(
-      `Body has ${varNames.length} variable(s) but no values were supplied.`,
+      t('bodyValuesMissing', { count: varNames.length, got: 0 }),
     );
   }
 
@@ -214,7 +218,7 @@ function buildButtonComponent(
       // the button's index in the template's buttons array.
       if (!override || !override.trim()) {
         throw new Error(
-          `URL button #${index + 1} uses {{1}} — requires a buttonParams[${index}] value.`,
+          t('urlButtonParamRequired', { n: index + 1, var: '{{1}}', index }),
         );
       }
       return {
