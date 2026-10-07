@@ -31,12 +31,16 @@
  */
 
 import type { MessageTemplate, TemplateButton } from '@/types';
-import { extractVariableIndices } from './template-validators';
+import {
+  extractVariableIndices,
+  extractVariableNames,
+  isNamedVariable,
+} from './template-validators';
 
 export interface SendTimeParams {
-  /** Values for body {{1}}, {{2}}, … indexed by variable position. */
-  body?: string[];
-  /** Value for TEXT-header {{1}}, when the header has a variable. */
+  /** Values for body variables (positional {{1}} array or named variable map). */
+  body?: string[] | Record<string, string>;
+  /** Value for TEXT-header variable, when the header has a variable. */
   headerText?: string;
   /** Override the template's static media URL for this send. */
   headerMediaUrl?: string;
@@ -62,11 +66,11 @@ export type MetaSendComponent =
     };
 
 type MetaSendParameter =
-  | { type: 'text'; text: string }
-  | { type: 'image'; image: { link?: string; id?: string } }
-  | { type: 'video'; video: { link?: string; id?: string } }
-  | { type: 'document'; document: { link?: string; id?: string } }
-  | { type: 'coupon_code'; coupon_code: string }
+  | { type: 'text'; text: string; parameter_name?: string }
+  | { type: 'image'; image: { link?: string; id?: string }; parameter_name?: string }
+  | { type: 'video'; video: { link?: string; id?: string }; parameter_name?: string }
+  | { type: 'document'; document: { link?: string; id?: string }; parameter_name?: string }
+  | { type: 'coupon_code'; coupon_code: string; parameter_name?: string }
   | { type: 'payload'; payload: string };
 
 function buildHeaderComponent(
@@ -77,20 +81,25 @@ function buildHeaderComponent(
   if (!headerType) return null;
 
   if (headerType === 'text') {
-    // TEXT header with {{1}} → need a value. Static text headers
+    // TEXT header with variable → need a value. Static text headers
     // (no variables) just ride along inside the template itself; no
     // header component required on send.
-    const varCount = extractVariableIndices(template.header_content ?? '').length;
-    if (varCount === 0) return null;
+    const varNames = extractVariableNames(template.header_content ?? '');
+    if (varNames.length === 0) return null;
     const value = params.headerText;
     if (!value || !value.trim()) {
       throw new Error(
-        'Header text variable {{1}} requires a value — pass headerText.',
+        'Header text variable requires a value — pass headerText.',
       );
+    }
+    const isNamed = varNames.some(isNamedVariable);
+    const param: MetaSendParameter = { type: 'text', text: value };
+    if (isNamed) {
+      param.parameter_name = varNames[0];
     }
     return {
       type: 'header',
-      parameters: [{ type: 'text', text: value }],
+      parameters: [param],
     };
   }
 
@@ -127,17 +136,47 @@ function buildBodyComponent(
   template: MessageTemplate,
   params: SendTimeParams,
 ): MetaSendComponent | null {
-  const varCount = extractVariableIndices(template.body_text).length;
+  const varNames = extractVariableNames(template.body_text);
   const body = params.body ?? [];
-  if (varCount === 0 && body.length === 0) return null;
-  if (body.length < varCount) {
+  const isNamed = varNames.some(isNamedVariable);
+
+  let values: string[] = [];
+  if (Array.isArray(body)) {
+    if (varNames.length === 0 && body.length === 0) return null;
+    if (body.length < varNames.length) {
+      throw new Error(
+        `Body has ${varNames.length} variable(s) but only ${body.length} value(s) were supplied.`,
+      );
+    }
+    // Trim to the variable count — extra values are dropped silently so
+    // a legacy caller that passes too many doesn't error out.
+    values = body.slice(0, varNames.length);
+  } else if (body && typeof body === 'object') {
+    values = varNames.map((name) => {
+      const val = (body as Record<string, string>)[name];
+      if (val === undefined || val === null) {
+        throw new Error(`Missing required template variable: ${name}`);
+      }
+      return String(val);
+    });
+  } else {
+    if (varNames.length === 0) return null;
     throw new Error(
-      `Body has ${varCount} variable(s) but only ${body.length} value(s) were supplied.`,
+      `Body has ${varNames.length} variable(s) but no values were supplied.`,
     );
   }
-  // Trim to the variable count — extra values are dropped silently so
-  // a legacy caller that passes too many doesn't error out.
-  const values = body.slice(0, varCount);
+
+  if (isNamed) {
+    return {
+      type: 'body',
+      parameters: values.map((text, idx) => ({
+        type: 'text',
+        parameter_name: varNames[idx],
+        text: String(text),
+      })),
+    };
+  }
+
   return {
     type: 'body',
     parameters: values.map((text) => ({ type: 'text', text: String(text) })),

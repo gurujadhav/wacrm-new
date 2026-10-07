@@ -72,6 +72,29 @@ export function extractVariableIndices(text: string): number[] {
 }
 
 /**
+ * Extract unique variable names from a string in order of first appearance.
+ * Returns `['1', '2']` for `"Hi {{1}} {{2}}"`
+ * Returns `['customer_name', 'order_id']` for `"Hi {{customer_name}}, order {{order_id}}"`
+ */
+export function extractVariableNames(text: string): string[] {
+  const matches = text.matchAll(/\{\{([a-zA-Z0-9_]+)\}\}/g);
+  const seen = new Set<string>();
+  const list: string[] = [];
+  for (const m of matches) {
+    const name = m[1];
+    if (!seen.has(name)) {
+      seen.add(name);
+      list.push(name);
+    }
+  }
+  return list;
+}
+
+export function isNamedVariable(name: string): boolean {
+  return isNaN(Number(name));
+}
+
+/**
  * Meta requires contiguous, 1-indexed variables. `{{1}} {{3}}` is
  * invalid — it must be `{{1}} {{2}}`.
  */
@@ -94,8 +117,12 @@ export function validateBody(bodyText: string): number[] {
       `Body text exceeds ${TEMPLATE_LIMITS.bodyMaxLength} chars (got ${bodyText.length}).`,
     );
   }
+  const allVarNames = extractVariableNames(bodyText);
+  const hasNamed = allVarNames.some(isNamedVariable);
   const indices = extractVariableIndices(bodyText);
-  assertContiguous(indices, 'Body');
+  if (!hasNamed) {
+    assertContiguous(indices, 'Body');
+  }
   return indices;
 }
 
@@ -106,7 +133,7 @@ export function validateFooter(footerText: string | undefined): void {
       `Footer text exceeds ${TEMPLATE_LIMITS.footerMaxLength} chars (got ${footerText.length}).`,
     );
   }
-  if (extractVariableIndices(footerText).length > 0) {
+  if (extractVariableNames(footerText).length > 0) {
     throw new Error('Footer text cannot contain {{N}} variables (Meta rule).');
   }
 }

@@ -42,6 +42,7 @@ interface MetaTemplateComponent {
     header_text?: string[]
     header_handle?: string[]
     body_text?: string[][]
+    body_text_named_params?: { param_name: string; example: string }[]
   }
 }
 
@@ -116,9 +117,9 @@ function extractSampleValues(
   body: MetaTemplateComponent | undefined,
   header: MetaTemplateComponent | undefined,
 ): TemplateSampleValues | null {
-  // Meta returns body_text as a 2D array — one row per example set.
-  // We take the first row (most templates have exactly one).
-  const bodySample = body?.example?.body_text?.[0]
+  // Meta returns body_text as a 2D array (for positional params) or body_text_named_params (for named params).
+  const namedSamples = body?.example?.body_text_named_params?.map((p) => p.example)
+  const bodySample = body?.example?.body_text?.[0] ?? (namedSamples?.length ? namedSamples : undefined)
   const headerSample = header?.example?.header_text
   if (!bodySample?.length && !headerSample?.length) return null
   const sv: TemplateSampleValues = {}

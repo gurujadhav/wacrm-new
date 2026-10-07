@@ -54,6 +54,49 @@ describe('buildSendComponents — body', () => {
       { type: 'body', parameters: [{ type: 'text', text: 'John' }] },
     ]);
   });
+
+  it('emits parameter_name for named variables when template uses named placeholders', () => {
+    const components = buildSendComponents(
+      row({
+        body_text:
+          'Hi {{customer_name}}, your order {{order_id}} has been confirmed for {{amount}}.',
+      }),
+      { body: ['Guru', 'TSO-12345', '₹1500'] },
+    );
+    expect(components).toEqual([
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', parameter_name: 'customer_name', text: 'Guru' },
+          { type: 'text', parameter_name: 'order_id', text: 'TSO-12345' },
+          { type: 'text', parameter_name: 'amount', text: '₹1500' },
+        ],
+      },
+    ]);
+  });
+
+  it('supports object mapping for named variables', () => {
+    const components = buildSendComponents(
+      row({
+        body_text: 'Hello {{customer_name}}, order {{order_id}} is ready.',
+      }),
+      {
+        body: {
+          customer_name: 'Guru',
+          order_id: 'TSO-999',
+        },
+      },
+    );
+    expect(components).toEqual([
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', parameter_name: 'customer_name', text: 'Guru' },
+          { type: 'text', parameter_name: 'order_id', text: 'TSO-999' },
+        ],
+      },
+    ]);
+  });
 });
 
 describe('buildSendComponents — header', () => {

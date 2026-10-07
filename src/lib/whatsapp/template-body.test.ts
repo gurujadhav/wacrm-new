@@ -64,6 +64,25 @@ describe('renderTemplateBody', () => {
       'twice and twice'
     );
   });
+
+  it('substitutes named placeholders from an array in order of appearance', () => {
+    expect(
+      renderTemplateBody('Hi {{customer_name}}, order *#{{order_id}}* paid ₹{{amount}}', [
+        'Guru',
+        'TSO-123',
+        '1500',
+      ])
+    ).toBe('Hi Guru, order *#TSO-123* paid ₹1500');
+  });
+
+  it('substitutes named placeholders from an object', () => {
+    expect(
+      renderTemplateBody('Hi {{customer_name}}, order *#{{order_id}}*', {
+        customer_name: 'Guru',
+        order_id: 'TSO-456',
+      })
+    ).toBe('Hi Guru, order *#TSO-456*');
+  });
 });
 
 describe('templateBodyParams', () => {

@@ -18,18 +18,43 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard';
 import type { MessageTemplate } from '@/types';
+import { extractVariableNames, isNamedVariable } from './template-validators';
 
 /**
- * Substitute positional `{{1}}`, `{{2}}`… placeholders in a template
+ * Substitute positional `{{1}}`, `{{2}}`… or named `{{customer_name}}`… placeholders in a template
  * body. A placeholder with no corresponding param is left as-is rather
  * than blanked, so a caller that under-supplies params gets a visible
- * `{{2}}` instead of a silently truncated sentence.
+ * placeholder instead of a silently truncated sentence.
  */
-export function renderTemplateBody(body: string, params: string[]): string {
-  return body.replace(/\{\{(\d+)\}\}/g, (_, raw) => {
-    const idx = Number(raw) - 1;
-    return params[idx] ?? `{{${raw}}}`;
-  });
+export function renderTemplateBody(
+  body: string,
+  params: string[] | Record<string, string>
+): string {
+  if (Array.isArray(params)) {
+    const varNames = extractVariableNames(body);
+    const hasNamed = varNames.some(isNamedVariable);
+    if (hasNamed) {
+      const map = new Map<string, string>();
+      varNames.forEach((name, i) => {
+        if (params[i] !== undefined) map.set(name, params[i]);
+      });
+      return body.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (match, name) => {
+        return map.get(name) ?? match;
+      });
+    }
+    return body.replace(/\{\{(\d+)\}\}/g, (_, raw) => {
+      const idx = Number(raw) - 1;
+      return params[idx] ?? `{{${raw}}}`;
+    });
+  }
+
+  if (params && typeof params === 'object') {
+    return body.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (match, name) => {
+      return (params as Record<string, string>)[name] ?? match;
+    });
+  }
+
+  return body;
 }
 
 /**

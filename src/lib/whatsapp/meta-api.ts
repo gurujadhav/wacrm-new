@@ -532,10 +532,25 @@ export async function sendTemplateMessage(
     }
   } else if (params && params.length > 0) {
     // Legacy body-only path — no template row available.
+    const knownNamed: Record<string, string[]> = {
+      order_confirmation: [
+        'customer_name',
+        'order_id',
+        'amount',
+        'pickup_date',
+        'pickup_time',
+        'pickup_address',
+      ],
+    };
+    const namedKeys = knownNamed[templateName];
     templatePayload.components = [
       {
         type: 'body',
-        parameters: params.map((p) => ({ type: 'text', text: String(p) })),
+        parameters: params.map((p, idx) => ({
+          type: 'text',
+          ...(namedKeys ? { parameter_name: namedKeys[idx] || `param_${idx + 1}` } : {}),
+          text: String(p),
+        })),
       },
     ]
   }
