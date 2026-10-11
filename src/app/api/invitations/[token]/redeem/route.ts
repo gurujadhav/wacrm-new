@@ -32,6 +32,8 @@ import { getT } from "@/lib/i18n/translate";
 const t = getT("Api");
 
 function getClientIp(request: Request): string {
+  const cf = request.headers.get("cf-connecting-ip") || request.headers.get("true-client-ip");
+  if (cf) return cf.trim();
   const xff = request.headers.get("x-forwarded-for");
   if (xff) return xff.split(",")[0].trim();
   const xri = request.headers.get("x-real-ip");
